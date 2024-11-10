@@ -1,8 +1,8 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
+const DoublyLinkedList = std.DoublyLinkedList;
 
 const TextInput = vaxis.widgets.TextInput;
-
 /// Set the default panic handler to the vaxis panic_handler. This will clean up the terminal if any
 /// panics occur
 pub const panic = vaxis.panic_handler;
@@ -49,6 +49,12 @@ const MyApp = struct {
     /// Text Input for the message box
     text_input: vaxis.widgets.TextInput,
 
+    /// Message History
+    message_history: DoublyLinkedList([]u8),
+
+    /// client stuff
+    port: u16 = 1234,
+
     pub fn init(allocator: std.mem.Allocator) !MyApp {
         var vx_instance = try vaxis.init(allocator, .{});
         return .{
@@ -58,10 +64,19 @@ const MyApp = struct {
             .vx = vx_instance,
             .mouse = null,
             .text_input = TextInput.init(allocator, &vx_instance.unicode),
+            .message_history = .{},
         };
     }
 
     pub fn deinit(self: *MyApp) void {
+        // Cleanup message history
+        var it = self.message_history.first;
+        while (it) |node| {
+            const next = node.next;
+            self.allocator.free(node.data);
+            self.allocator.destroy(node);
+            it = next;
+        }
         // Deinit takes an optional allocator. You can choose to pass an allocator to clean up
         // memory, or pass null if your application is shutting down and let the OS clean up the
         // memory
@@ -126,7 +141,7 @@ const MyApp = struct {
                 if (key.matches('c', .{ .ctrl = true })) {
                     self.should_quit = true;
                 } else if (key.matches('e', .{})) {
-                    self.text_input.clearAndFree();
+                    try self.send_message();
                 } else {
                     try self.text_input.update(.{ .key_press = key });
                 }
@@ -139,8 +154,6 @@ const MyApp = struct {
 
     /// Draw our current state
     pub fn draw(self: *MyApp) void {
-        const msg = "Hello, world! ahahah";
-
         // Window is a bounded area with a view to the screen. You cannot draw outside of a windows
         // bounds. They are light structures, not intended to be stored.
         const win = self.vx.window();
@@ -150,41 +163,46 @@ const MyApp = struct {
         // application during the draw cycle.
         win.clear();
 
-        // In addition to clearing our window, we want to clear the mouse shape state since we may
-        // be changing that as well
-        self.vx.setMouseShape(.default);
-
         const child = win.child(.{
-            .x_off = (win.width / 2) - 7,
-            .y_off = win.height / 2 + 1,
-            .width = .{ .limit = msg.len },
-            .height = .{ .limit = 1 },
+            .x_off = win.width / 2,
+            .y_off = 0,
+            .width = .{ .limit = (win.width / 2) - 2 },
+            .height = .{ .limit = win.height },
+            .border = .{ .where = .all },
         });
 
         const message_box = win.child(.{
             .x_off = 1,
-            .y_off = 10,
-            .width = .{ .limit = win.height },
-            .height = .{ .limit = 3 }, // multiline string can be done by
+            .y_off = 1,
+            .width = .{ .limit = (win.width / 2) - 2 },
+            .height = .{ .limit = 3 },
             .border = .{ .where = .all },
         });
 
         self.text_input.draw(message_box);
 
-        // mouse events are much easier to handle in the draw cycle. Windows have a helper method to
-        // determine if the event occurred in the target window. This method returns null if there
-        // is no mouse event, or if it occurred outside of the window
-        const style: vaxis.Style = if (child.hasMouse(self.mouse)) |_| blk: {
-            // We handled the mouse event, so set it to null
-            self.mouse = null;
-            self.vx.setMouseShape(.pointer);
-            break :blk .{ .reverse = true };
-        } else .{};
+        // TODO: Handle message history going out of bounds (idk how?)
+        var it = self.message_history.last;
+        var y_offset: u32 = 3;
+        while (it) |node| : (it = node.prev) {
+            _ = try child.printSegment(.{ .text = node.data }, .{ .row_offset = (win.height - y_offset) });
+            y_offset += 1;
+        }
+    }
 
-        // Print a text segment to the screen. This is a helper function which iterates over the
-        // text field for graphemes. Alternatively, you can implement your own print functions and
-        // use the writeCell API.
-        _ = try child.printSegment(.{ .text = msg, .style = style }, .{});
+    pub fn send_message(self: *MyApp) !void {
+        const msg = try self.text_input.toOwnedSlice();
+        defer self.allocator.free(msg);
+
+        try self.add_to_history(msg);
+    }
+
+    pub fn add_to_history(self: *MyApp, message: []const u8) !void {
+        // Add new message
+        const msg_copy = try self.allocator.dupe(u8, message);
+        const node = try self.allocator.create(DoublyLinkedList([]u8).Node);
+        node.* = .{ .data = msg_copy };
+        self.message_history.prepend(node);
     }
 };
 

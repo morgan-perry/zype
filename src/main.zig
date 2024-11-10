@@ -67,6 +67,7 @@ const MyApp = struct {
         // memory
         self.vx.deinit(self.allocator, self.tty.anyWriter());
         self.tty.deinit();
+        self.text_input.deinit();
     }
 
     pub fn run(self: *MyApp) !void {
@@ -81,8 +82,6 @@ const MyApp = struct {
         try loop.start();
 
         try self.vx.enterAltScreen(self.tty.anyWriter());
-
-        defer self.text_input.deinit();
 
         // Query the terminal to detect advanced features, such as kitty keyboard protocol, etc.
         // This will automatically enable the features in the screen you are in, so you will want to

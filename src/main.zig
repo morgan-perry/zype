@@ -46,13 +46,18 @@ const MyApp = struct {
     /// A mouse event that we will handle in the draw cycle
     mouse: ?vaxis.Mouse,
 
+    /// Text Input for the message box
+    text_input: vaxis.widgets.TextInput,
+
     pub fn init(allocator: std.mem.Allocator) !MyApp {
+        var vx_instance = try vaxis.init(allocator, .{});
         return .{
             .allocator = allocator,
             .should_quit = false,
             .tty = try vaxis.Tty.init(),
-            .vx = try vaxis.init(allocator, .{}),
+            .vx = vx_instance,
             .mouse = null,
+            .text_input = TextInput.init(allocator, &vx_instance.unicode),
         };
     }
 
@@ -77,8 +82,7 @@ const MyApp = struct {
 
         try self.vx.enterAltScreen(self.tty.anyWriter());
 
-        var text_input = TextInput.init(self.allocator, &self.vx.unicode);
-        defer text_input.deinit();
+        defer self.text_input.deinit();
 
         // Query the terminal to detect advanced features, such as kitty keyboard protocol, etc.
         // This will automatically enable the features in the screen you are in, so you will want to
@@ -99,10 +103,10 @@ const MyApp = struct {
             loop.pollEvent();
             // tryEvent returns events until the queue is empty
             while (loop.tryEvent()) |event| {
-                try self.update(event, &text_input);
+                try self.update(event);
             }
             // Draw our application after handling events
-            self.draw(&text_input);
+            self.draw();
 
             // It's best to use a buffered writer for the render method. TTY provides one, but you
             // may use your own. The provided bufferedWriter has a buffer size of 4096
@@ -114,16 +118,18 @@ const MyApp = struct {
     }
 
     /// Update our application state from an event
-    pub fn update(self: *MyApp, event: Event, text_input: *TextInput) !void {
+    pub fn update(self: *MyApp, event: Event) !void {
         switch (event) {
             .key_press => |key| {
                 // key.matches does some basic matching algorithms. Key matching can be complex in
                 // the presence of kitty keyboard encodings, this will generally be a good approach.
                 // There are other matching functions available for specific purposes, as well
-                if (key.matches('q', .{ .ctrl = false })) {
+                if (key.matches('c', .{ .ctrl = true })) {
                     self.should_quit = true;
+                } else if (key.matches('e', .{})) {
+                    self.text_input.clearAndFree();
                 } else {
-                    try text_input.update(.{ .key_press = key });
+                    try self.text_input.update(.{ .key_press = key });
                 }
             },
             .mouse => |mouse| self.mouse = mouse,
@@ -133,7 +139,7 @@ const MyApp = struct {
     }
 
     /// Draw our current state
-    pub fn draw(self: *MyApp, text_input: *TextInput) void {
+    pub fn draw(self: *MyApp) void {
         const msg = "Hello, world! ahahah";
 
         // Window is a bounded area with a view to the screen. You cannot draw outside of a windows
@@ -157,14 +163,14 @@ const MyApp = struct {
         });
 
         const message_box = win.child(.{
-            .x_off = (win.height / 4) - 7,
-            .y_off = win.height / 4,
+            .x_off = 1,
+            .y_off = 10,
             .width = .{ .limit = win.height },
             .height = .{ .limit = 3 }, // multiline string can be done by
             .border = .{ .where = .all },
         });
 
-        text_input.draw(message_box);
+        self.text_input.draw(message_box);
 
         // mouse events are much easier to handle in the draw cycle. Windows have a helper method to
         // determine if the event occurred in the target window. This method returns null if there

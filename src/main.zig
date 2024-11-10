@@ -1,6 +1,8 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
 
+const TextInput = vaxis.widgets.TextInput;
+
 /// Set the default panic handler to the vaxis panic_handler. This will clean up the terminal if any
 /// panics occur
 pub const panic = vaxis.panic_handler;
@@ -75,6 +77,9 @@ const MyApp = struct {
 
         try self.vx.enterAltScreen(self.tty.anyWriter());
 
+        var text_input = TextInput.init(self.allocator, &self.vx.unicode);
+        defer text_input.deinit();
+
         // Query the terminal to detect advanced features, such as kitty keyboard protocol, etc.
         // This will automatically enable the features in the screen you are in, so you will want to
         // call it after entering the alt screen if you are a full screen application. The second
@@ -94,10 +99,10 @@ const MyApp = struct {
             loop.pollEvent();
             // tryEvent returns events until the queue is empty
             while (loop.tryEvent()) |event| {
-                try self.update(event);
+                try self.update(event, &text_input);
             }
             // Draw our application after handling events
-            self.draw();
+            self.draw(&text_input);
 
             // It's best to use a buffered writer for the render method. TTY provides one, but you
             // may use your own. The provided bufferedWriter has a buffer size of 4096
@@ -109,14 +114,17 @@ const MyApp = struct {
     }
 
     /// Update our application state from an event
-    pub fn update(self: *MyApp, event: Event) !void {
+    pub fn update(self: *MyApp, event: Event, text_input: *TextInput) !void {
         switch (event) {
             .key_press => |key| {
                 // key.matches does some basic matching algorithms. Key matching can be complex in
                 // the presence of kitty keyboard encodings, this will generally be a good approach.
                 // There are other matching functions available for specific purposes, as well
-                if (key.matches('q', .{ .ctrl = false }))
+                if (key.matches('q', .{ .ctrl = false })) {
                     self.should_quit = true;
+                } else {
+                    try text_input.update(.{ .key_press = key });
+                }
             },
             .mouse => |mouse| self.mouse = mouse,
             .winsize => |ws| try self.vx.resize(self.allocator, self.tty.anyWriter(), ws),
@@ -125,9 +133,8 @@ const MyApp = struct {
     }
 
     /// Draw our current state
-    pub fn draw(self: *MyApp) void {
+    pub fn draw(self: *MyApp, text_input: *TextInput) void {
         const msg = "Hello, world! ahahah";
-        const lol = "lolol";
 
         // Window is a bounded area with a view to the screen. You cannot draw outside of a windows
         // bounds. They are light structures, not intended to be stored.
@@ -153,9 +160,11 @@ const MyApp = struct {
             .x_off = (win.height / 4) - 7,
             .y_off = win.height / 4,
             .width = .{ .limit = win.height },
-            .height = .{ .limit = 5 },
+            .height = .{ .limit = 3 }, // multiline string can be done by
             .border = .{ .where = .all },
         });
+
+        text_input.draw(message_box);
 
         // mouse events are much easier to handle in the draw cycle. Windows have a helper method to
         // determine if the event occurred in the target window. This method returns null if there
@@ -167,16 +176,10 @@ const MyApp = struct {
             break :blk .{ .reverse = true };
         } else .{};
 
-        const message_style = vaxis.Style{
-            .strikethrough = true,
-        };
-
         // Print a text segment to the screen. This is a helper function which iterates over the
         // text field for graphemes. Alternatively, you can implement your own print functions and
         // use the writeCell API.
         _ = try child.printSegment(.{ .text = msg, .style = style }, .{});
-
-        _ = try message_box.printSegment(.{ .text = lol, .style = message_style }, .{});
     }
 };
 

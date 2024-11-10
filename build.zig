@@ -10,11 +10,21 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "libvaxis-starter",
+        .name = "client",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
+
+    const server = b.addExecutable(.{
+        .name = "server",
+        .root_source_file = b.path("src/server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    b.installArtifact(server);
+
     exe.root_module.addImport("vaxis", vaxis_dep.module("vaxis"));
 
     b.installArtifact(exe);
@@ -25,8 +35,15 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
 
-    const run_step = b.step("run", "Run the app");
+    const run_step = b.step("c", "Run the client");
     run_step.dependOn(&run_cmd.step);
+
+    const run_cmd_server = b.addRunArtifact(server);
+    if (b.args) |args| {
+        run_cmd_server.addArgs(args);
+    }
+    const run_step_server = b.step("s", "Run the server");
+    run_step_server.dependOn(&run_cmd_server.step);
 
     const exe_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),

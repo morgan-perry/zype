@@ -1,6 +1,7 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
 const DoublyLinkedList = std.DoublyLinkedList;
+const net = std.net;
 
 const TextInput = vaxis.widgets.TextInput;
 /// Set the default panic handler to the vaxis panic_handler. This will clean up the terminal if any
@@ -54,6 +55,7 @@ const MyApp = struct {
 
     /// client stuff
     port: u16 = 1234,
+    connected: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) !MyApp {
         var vx_instance = try vaxis.init(allocator, .{});
@@ -66,6 +68,35 @@ const MyApp = struct {
             .text_input = TextInput.init(allocator, &vx_instance.unicode),
             .message_history = .{},
         };
+    }
+
+    pub fn init_connection(self: *MyApp) !void {
+        const peer = try net.Address.parseIp4("127.0.0.1", self.port);
+        const stream = net.tcpConnectToAddress(peer) catch |err| {
+            // Format error message
+            const error_msg = try std.fmt.allocPrint(self.allocator, "Connection failed (port {d}): {s}", .{ self.port, @errorName(err) });
+            defer self.allocator.free(error_msg);
+
+            // Add error to history
+            try self.add_to_history(error_msg);
+            return; // or return; if you don't want to propagate the error
+        };
+        self.connected = true;
+        defer stream.close();
+        // Format the message using allocPrint
+        const connection_message = try std.fmt.allocPrint(self.allocator, "Connected to: 127.0.0.1:{d}", .{self.port});
+        defer self.allocator.free(connection_message);
+
+        try self.add_to_history(connection_message);
+
+        // move to own method later
+        const data = "hello server";
+        var writer = stream.writer();
+        const size = try writer.write(data);
+        const message = try std.fmt.allocPrint(self.allocator, "Sending '{s}' to peer, total written: {d} bytes\n", .{ data, size });
+        defer self.allocator.free(message);
+
+        try self.add_to_history(message);
     }
 
     pub fn deinit(self: *MyApp) void {
@@ -142,6 +173,8 @@ const MyApp = struct {
                     self.should_quit = true;
                 } else if (key.matches('e', .{})) {
                     try self.send_message();
+                } else if (key.matches('p', .{})) {
+                    try self.init_connection();
                 } else {
                     try self.text_input.update(.{ .key_press = key });
                 }

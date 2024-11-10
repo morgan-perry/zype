@@ -19,7 +19,6 @@ pub fn main() !void {
     while (true) {
         var client = try server.accept();
         defer client.stream.close();
-
         std.debug.print("Connection received! {} is sending data.\n", .{client.address});
 
         const message = try client.stream.reader().readAllAlloc(allocator, 1024);

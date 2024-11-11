@@ -12,3 +12,4 @@ devenv.local.nix
 # code
 .zig-cache/
 zig-out/
+Session.vim

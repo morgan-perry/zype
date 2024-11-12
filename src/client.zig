@@ -108,9 +108,6 @@ const MessagerApp = struct {
             self.allocator.destroy(node);
             it = next;
         }
-        // Deinit takes an optional allocator. You can choose to pass an allocator to clean up
-        // memory, or pass null if your application is shutting down and let the OS clean up the
-        // memory
         self.vx.deinit(self.allocator, self.tty.anyWriter());
         self.tty.deinit();
         self.text_input.deinit();
@@ -131,19 +128,12 @@ const MessagerApp = struct {
         try self.vx.enterAltScreen(self.tty.anyWriter());
 
         // Query the terminal to detect advanced features, such as kitty keyboard protocol, etc.
-        // This will automatically enable the features in the screen you are in, so you will want to
-        // call it after entering the alt screen if you are a full screen application. The second
-        // arg is a timeout for the terminal to send responses. Typically the response will be very
-        // fast, however it could be slow on ssh connections.
         try self.vx.queryTerminal(self.tty.anyWriter(), 1 * std.time.ns_per_s);
 
         // Enable mouse events
         try self.vx.setMouseMode(self.tty.anyWriter(), true);
 
-        // This is the main event loop. The basic structure is
-        // 1. Handle events
-        // 2. Draw application
-        // 3. Render
+        // Main event loop
         while (!self.should_quit) {
             // pollEvent blocks until we have an event
             loop.pollEvent();
@@ -167,9 +157,6 @@ const MessagerApp = struct {
     pub fn update(self: *MessagerApp, event: Event) !void {
         switch (event) {
             .key_press => |key| {
-                // key.matches does some basic matching algorithms. Key matching can be complex in
-                // the presence of kitty keyboard encodings, this will generally be a good approach.
-                // There are other matching functions available for specific purposes, as well
                 if (key.matches('c', .{ .ctrl = true })) {
                     self.should_quit = true;
                 } else if (key.matches(vaxis.Key.enter, .{})) {
@@ -188,13 +175,8 @@ const MessagerApp = struct {
 
     /// Draw our current state
     pub fn draw(self: *MessagerApp) void {
-        // Window is a bounded area with a view to the screen. You cannot draw outside of a windows
-        // bounds. They are light structures, not intended to be stored.
         const win = self.vx.window();
 
-        // Clearing the window has the effect of setting each cell to it's "default" state. Vaxis
-        // applications typically will be immediate mode, and you will redraw your entire
-        // application during the draw cycle.
         win.clear();
 
         const child = win.child(.{
@@ -268,11 +250,8 @@ pub fn main() !void {
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
 
-    // while (args.next()) |arg| {
-    //     std.debug.print("{s}\n", .{arg});
-    // }
-    _ = args.next(); // clear path
-    const username = args.next() orelse "lol-username";
+    _ = args.next(); // Clear path
+    const username = args.next() orelse "Username";
 
     // Initialize our application
     var app = try MessagerApp.init(allocator, username);

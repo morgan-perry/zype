@@ -19,17 +19,17 @@ const Client = struct {
         // NOTE: readAllAllocMem will not block the thread, no documentation :(
         var buffer: [65536]u8 = undefined; // no checks on passing buffer limit, ArrayList
         while (true) {
-            const bytes_read = self.client.stream.reader().read(&buffer) catch |err| {
-                // TODO: Switch case for errors like connection reset
-                std.debug.print("Error reading from client: {}\n", .{err});
-                break;
+            const bytes_read = self.client.stream.reader().read(&buffer) catch |err|
+                switch (err) {
+                error.ConnectionResetByPeer => {
+                    std.debug.print("Client disconnected\n", .{});
+                    break;
+                },
+                else => {
+                    std.debug.print("Error reading from client: {}\n", .{err});
+                    break;
+                },
             };
-
-            // Check if client disconnected
-            if (bytes_read == 0) {
-                std.debug.print("Client disconnected\n", .{});
-                break;
-            }
 
             // Process the message
             const message = buffer[0..bytes_read];

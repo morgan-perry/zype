@@ -20,6 +20,7 @@ const Client = struct {
         var buffer: [65536]u8 = undefined; // no checks on passing buffer limit, ArrayList
         while (true) {
             const bytes_read = self.client.stream.reader().read(&buffer) catch |err| {
+                // TODO: Switch case for errors like connection reset
                 std.debug.print("Error reading from client: {}\n", .{err});
                 break;
             };
@@ -32,7 +33,7 @@ const Client = struct {
 
             // Process the message
             const message = buffer[0..bytes_read];
-            std.debug.print("Client says: {s}", .{message});
+            std.debug.print("Client says: {s}\n", .{message});
 
             // Create and send response
             const response = std.fmt.allocPrint(self.allocator, "Received at {d}: {s}", .{ std.time.timestamp(), message }) catch |err| {

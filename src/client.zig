@@ -36,7 +36,7 @@ const Event = union(enum) {
 };
 
 /// The application state
-const MyApp = struct {
+const MessagerApp = struct {
     allocator: std.mem.Allocator,
     // A flag for if we should quit
     should_quit: bool,
@@ -54,10 +54,13 @@ const MyApp = struct {
     message_history: DoublyLinkedList([]u8),
 
     /// client stuff
+    stream: ?std.net.Stream,
+    // Writer to write to connected socket
+    writer: ?std.net.Stream.Writer,
     port: u16 = 1234,
-    connected: bool = false,
+    connected: bool = false, // May not be useful
 
-    pub fn init(allocator: std.mem.Allocator) !MyApp {
+    pub fn init(allocator: std.mem.Allocator) !MessagerApp {
         var vx_instance = try vaxis.init(allocator, .{});
         return .{
             .allocator = allocator,
@@ -67,10 +70,12 @@ const MyApp = struct {
             .mouse = null,
             .text_input = TextInput.init(allocator, &vx_instance.unicode),
             .message_history = .{},
+            .writer = null,
+            .stream = null,
         };
     }
 
-    pub fn init_connection(self: *MyApp) !void {
+    pub fn init_connection(self: *MessagerApp) !void {
         const peer = try net.Address.parseIp4("127.0.0.1", self.port);
         const stream = net.tcpConnectToAddress(peer) catch |err| {
             // Format error message
@@ -82,24 +87,17 @@ const MyApp = struct {
             return; // or return; if you don't want to propagate the error
         };
         self.connected = true;
-        defer stream.close();
+
+        self.stream = stream; // stream closed in deinit
+        self.writer = stream.writer();
         // Format the message using allocPrint
         const connection_message = try std.fmt.allocPrint(self.allocator, "Connected to: 127.0.0.1:{d}", .{self.port});
         defer self.allocator.free(connection_message);
 
         try self.add_to_history(connection_message);
-
-        // move to own method later
-        const data = "hello server";
-        var writer = stream.writer();
-        const size = try writer.write(data);
-        const message = try std.fmt.allocPrint(self.allocator, "Sending '{s}' to peer, total written: {d} bytes\n", .{ data, size });
-        defer self.allocator.free(message);
-
-        try self.add_to_history(message);
     }
 
-    pub fn deinit(self: *MyApp) void {
+    pub fn deinit(self: *MessagerApp) void {
         // Cleanup message history
         var it = self.message_history.first;
         while (it) |node| {
@@ -114,9 +112,10 @@ const MyApp = struct {
         self.vx.deinit(self.allocator, self.tty.anyWriter());
         self.tty.deinit();
         self.text_input.deinit();
+        self.stream.?.close();
     }
 
-    pub fn run(self: *MyApp) !void {
+    pub fn run(self: *MessagerApp) !void {
         // Initialize our event loop. This particular loop requires intrusive init
         var loop: vaxis.Loop(Event) = .{
             .tty = &self.tty,
@@ -163,7 +162,7 @@ const MyApp = struct {
     }
 
     /// Update our application state from an event
-    pub fn update(self: *MyApp, event: Event) !void {
+    pub fn update(self: *MessagerApp, event: Event) !void {
         switch (event) {
             .key_press => |key| {
                 // key.matches does some basic matching algorithms. Key matching can be complex in
@@ -186,7 +185,7 @@ const MyApp = struct {
     }
 
     /// Draw our current state
-    pub fn draw(self: *MyApp) void {
+    pub fn draw(self: *MessagerApp) void {
         // Window is a bounded area with a view to the screen. You cannot draw outside of a windows
         // bounds. They are light structures, not intended to be stored.
         const win = self.vx.window();
@@ -223,16 +222,23 @@ const MyApp = struct {
         }
     }
 
-    pub fn send_message(self: *MyApp) !void {
+    pub fn send_message(self: *MessagerApp) !void {
+        // Clears and returns input in TextInput
         const msg = try self.text_input.toOwnedSlice();
         defer self.allocator.free(msg);
 
-        try self.add_to_history(msg);
+        if (self.writer) |writer| {
+            _ = try writer.write(msg);
+            try self.add_to_history(msg);
+        } else {
+            try self.add_to_history("Not Connected to server");
+        }
     }
 
-    pub fn add_to_history(self: *MyApp, message: []const u8) !void {
+    /// Adds current TextInput to the message history
+    pub fn add_to_history(self: *MessagerApp, message: []const u8) !void {
         // Add new message
-        const msg_copy = try self.allocator.dupe(u8, message);
+        const msg_copy = try self.allocator.dupe(u8, message); // can i free this memory here?
         const node = try self.allocator.create(DoublyLinkedList([]u8).Node);
         node.* = .{ .data = msg_copy };
         self.message_history.prepend(node);
@@ -252,7 +258,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Initialize our application
-    var app = try MyApp.init(allocator);
+    var app = try MessagerApp.init(allocator);
     defer app.deinit();
 
     // Run the application

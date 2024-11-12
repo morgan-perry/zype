@@ -59,8 +59,9 @@ const MessagerApp = struct {
     writer: ?std.net.Stream.Writer,
     port: u16 = 1234,
     connected: bool = false, // May not be useful
+    username: [:0]const u8,
 
-    pub fn init(allocator: std.mem.Allocator) !MessagerApp {
+    pub fn init(allocator: std.mem.Allocator, username: [:0]const u8) !MessagerApp {
         var vx_instance = try vaxis.init(allocator, .{});
         return .{
             .allocator = allocator,
@@ -72,6 +73,7 @@ const MessagerApp = struct {
             .message_history = .{},
             .writer = null,
             .stream = null,
+            .username = username,
         };
     }
 
@@ -222,13 +224,18 @@ const MessagerApp = struct {
         }
     }
 
+    /// Sends message to a connected server
     pub fn send_message(self: *MessagerApp) !void {
         // Clears and returns input in TextInput
         const msg = try self.text_input.toOwnedSlice();
         defer self.allocator.free(msg);
 
+        // Create a new string that combines username and message
+        const msg_with_username = try std.fmt.allocPrint(self.allocator, "{s}: {s}", .{ self.username, msg });
+        defer self.allocator.free(msg_with_username);
+
         if (self.writer) |writer| {
-            _ = try writer.write(msg);
+            _ = try writer.write(msg_with_username);
             try self.add_to_history(msg);
         } else {
             try self.add_to_history("Not Connected to server");
@@ -257,8 +264,18 @@ pub fn main() !void {
     }
     const allocator = gpa.allocator();
 
+    // Read in arguements
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
+
+    // while (args.next()) |arg| {
+    //     std.debug.print("{s}\n", .{arg});
+    // }
+    _ = args.next(); // clear path
+    const username = args.next() orelse "lol-username";
+
     // Initialize our application
-    var app = try MessagerApp.init(allocator);
+    var app = try MessagerApp.init(allocator, username);
     defer app.deinit();
 
     // Run the application

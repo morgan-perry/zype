@@ -206,16 +206,18 @@ const MessagerApp = struct {
 
         self.text_input.draw(message_box);
 
-        // TODO: Handle message history going out of bounds (idk how?)
         var it = self.message_history.first;
         var y_offset: u32 = 3;
         var i: u16 = 0; // NOTE: Does this cause a misalignment on CPU, should I use u32 regardless?
-        while (it) |node| : (it = node.next) {
-            if (i <= (child.height - 1)) {
-                if (i < win.height) {
-                    _ = try child.printSegment(.{ .text = node.data }, .{ .row_offset = (win.height - y_offset) });
-                    y_offset += 1;
-                    i += 1;
+        if (child.height > 0) {
+            std.debug.assert(child.height > 0);
+            while (it) |node| : (it = node.next) {
+                if (i <= (child.height - 1)) {
+                    if (i < win.height) {
+                        _ = try child.printSegment(.{ .text = node.data }, .{ .row_offset = (win.height - y_offset) });
+                        y_offset += 1;
+                        i += 1;
+                    }
                 }
             }
         }

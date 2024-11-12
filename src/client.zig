@@ -58,7 +58,7 @@ const MessagerApp = struct {
     // Writer to write to connected socket
     writer: ?std.net.Stream.Writer,
     port: u16 = 1234,
-    connected: bool = false, // May not be useful
+    connected: bool = false,
     username: [:0]const u8,
 
     pub fn init(allocator: std.mem.Allocator, username: [:0]const u8) !MessagerApp {
@@ -78,6 +78,12 @@ const MessagerApp = struct {
     }
 
     pub fn init_connection(self: *MessagerApp) !void {
+        if (self.connected) {
+            const already_connected_msg = try std.fmt.allocPrint(self.allocator, "You are already connected to: 127.0.0.1:{d}", .{self.port});
+            defer self.allocator.free(already_connected_msg);
+            try self.add_to_history(already_connected_msg);
+            return;
+        }
         const peer = try net.Address.parseIp4("127.0.0.1", self.port);
         const stream = net.tcpConnectToAddress(peer) catch |err| {
             // Format error message
@@ -161,7 +167,7 @@ const MessagerApp = struct {
                     self.should_quit = true;
                 } else if (key.matches(vaxis.Key.enter, .{})) {
                     try self.send_message();
-                } else if (key.matches('e', .{ .ctrl = true })) {
+                } else if (key.matches('p', .{ .ctrl = true })) {
                     try self.init_connection();
                 } else {
                     try self.text_input.update(.{ .key_press = key });

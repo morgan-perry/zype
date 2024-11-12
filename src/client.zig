@@ -172,9 +172,9 @@ const MessagerApp = struct {
                 // There are other matching functions available for specific purposes, as well
                 if (key.matches('c', .{ .ctrl = true })) {
                     self.should_quit = true;
-                } else if (key.matches('e', .{})) {
+                } else if (key.matches(vaxis.Key.enter, .{})) {
                     try self.send_message();
-                } else if (key.matches('p', .{})) {
+                } else if (key.matches('e', .{ .ctrl = true })) {
                     try self.init_connection();
                 } else {
                     try self.text_input.update(.{ .key_press = key });

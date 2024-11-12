@@ -114,6 +114,8 @@ const MessagerApp = struct {
             self.allocator.destroy(node);
             it = next;
         }
+        // Reset the list to empty
+        self.message_history = .{};
         self.vx.deinit(self.allocator, self.tty.anyWriter());
         self.tty.deinit();
         self.text_input.deinit();
@@ -192,6 +194,7 @@ const MessagerApp = struct {
             .height = .{ .limit = win.height },
             .border = .{ .where = .all },
         });
+        child.clear();
 
         const message_box = win.child(.{
             .x_off = 1,
@@ -204,11 +207,17 @@ const MessagerApp = struct {
         self.text_input.draw(message_box);
 
         // TODO: Handle message history going out of bounds (idk how?)
-        var it = self.message_history.last;
+        var it = self.message_history.first;
         var y_offset: u32 = 3;
-        while (it) |node| : (it = node.prev) {
-            _ = try child.printSegment(.{ .text = node.data }, .{ .row_offset = (win.height - y_offset) });
-            y_offset += 1;
+        var i: u16 = 0; // NOTE: Does this cause a misalignment on CPU, should I use u32 regardless?
+        while (it) |node| : (it = node.next) {
+            if (i <= (child.height - 1)) {
+                if (i < win.height) {
+                    _ = try child.printSegment(.{ .text = node.data }, .{ .row_offset = (win.height - y_offset) });
+                    y_offset += 1;
+                    i += 1;
+                }
+            }
         }
     }
 

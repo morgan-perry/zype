@@ -103,6 +103,8 @@ const MessagerApp = struct {
         defer self.allocator.free(connection_message);
 
         try self.add_to_history(connection_message);
+        self.writer = stream.writer();
+        _ = try std.Thread.spawn(.{}, MessagerApp.recv_message, .{self});
     }
 
     pub fn deinit(self: *MessagerApp) void {
@@ -235,9 +237,28 @@ const MessagerApp = struct {
 
         if (self.writer) |writer| {
             _ = try writer.write(msg_with_username);
-            try self.add_to_history(msg);
         } else {
             try self.add_to_history("Not Connected to server");
+        }
+    }
+
+    fn recv_message(self: *MessagerApp) !void {
+        var buffer: [65536]u8 = undefined;
+        while (true) {
+            const bytes_read = self.stream.?.reader().read(&buffer) catch |err|
+                switch (err) {
+                error.ConnectionResetByPeer => {
+                    std.debug.print("Client disconnected\n", .{});
+                    break;
+                },
+                else => {
+                    std.debug.print("Error reading from client: {}\n", .{err});
+                    break;
+                },
+            };
+
+            const message = buffer[0..bytes_read];
+            try self.add_to_history(message);
         }
     }
 

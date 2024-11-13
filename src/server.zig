@@ -3,6 +3,9 @@ const net = std.net;
 
 const PORT = 1234;
 
+var clients_mutex = std.Thread.Mutex{};
+var clients: std.ArrayList(*Client) = undefined;
+
 const Client = struct {
     client: std.net.Server.Connection,
     pool: *std.Thread.Pool,
@@ -10,13 +13,49 @@ const Client = struct {
 
     /// Acts as listen, blocks until connection and starts thread for further messages
     pub fn pool_init(self: *Client) !void {
+        {
+            clients_mutex.lock();
+            defer clients_mutex.unlock();
+            try clients.append(self);
+        }
         try self.pool.spawn(Client.reader, .{self});
+    }
+
+    pub fn broadcast_message(_: *Client, message: []const u8) !void {
+        clients_mutex.lock();
+        defer clients_mutex.unlock();
+
+        for (clients.items, 0..) |client, i| {
+            // lol at this name
+            client.client.stream.writer().writeAll(message) catch |err| {
+                switch (err) {
+                    error.BrokenPipe => {
+                        // Client disconnected, remove it from the list
+                        _ = clients.orderedRemove(i);
+                        continue;
+                    },
+                    else => {
+                        std.debug.print("Failed to write to client: {}\n", .{err});
+                    },
+                }
+            };
+        }
     }
 
     pub fn reader(self: *Client) void {
         defer {
+            // Remove self from clients list
+            clients_mutex.lock();
+            for (clients.items, 0..) |client, i| {
+                if (client == self) {
+                    _ = clients.orderedRemove(i);
+                    break;
+                }
+            }
+            clients_mutex.unlock();
+
             self.client.stream.close();
-            self.allocator.destroy(self); // Cleans up from heap
+            self.allocator.destroy(self);
         }
         // NOTE: readAllAllocMem will not block the thread, no documentation :(
         var buffer: [65536]u8 = undefined; // no checks on passing buffer limit, ArrayList
@@ -33,22 +72,21 @@ const Client = struct {
                 },
             };
 
+            std.debug.assert(bytes_read < 65536);
             // Process the message
             const message = buffer[0..bytes_read];
-            std.debug.print("Client says: {s}\n", .{message});
+            if (message.len > 0) {
+                std.debug.print("Client says: {s}\n", .{message});
+            }
 
-            // Create and send response
+            // Broadcast message to all clients
             const response = std.fmt.allocPrint(self.allocator, "Received at {d}: {s}", .{ std.time.timestamp(), message }) catch |err| {
                 std.debug.print("Error creating response: {}\n", .{err});
                 continue;
             };
             defer self.allocator.free(response);
 
-            // Send response back to client
-            self.client.stream.writer().writeAll(response) catch |err| {
-                std.debug.print("Error sending response: {}\n", .{err});
-                continue;
-            };
+            try self.broadcast_message(response);
         }
     }
 };
@@ -73,6 +111,17 @@ pub fn main() !void {
         .n_jobs = 256, // this sets the max amount of clients that can join
     });
     defer thread_pool.deinit();
+    defer {
+        for (0..clients.items.len) |i| {
+            // No need to shift elements if all are removed
+            _ = clients.swapRemove(i);
+        }
+    }
+
+    clients = std.ArrayList(*Client).init(gpa.allocator());
+    defer clients.deinit();
+
+    clients_mutex = std.Thread.Mutex{};
 
     const loopback = try net.Ip4Address.parse("127.0.0.1", PORT);
     const localhost = net.Address{ .in = loopback };

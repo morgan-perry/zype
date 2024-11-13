@@ -1,6 +1,8 @@
 const std = @import("std");
 const net = std.net;
 
+const PORT = 1234;
+
 const Client = struct {
     client: std.net.Server.Connection,
     pool: *std.Thread.Pool,
@@ -72,7 +74,7 @@ pub fn main() !void {
     });
     defer thread_pool.deinit();
 
-    const loopback = try net.Ip4Address.parse("127.0.0.1", 1234);
+    const loopback = try net.Ip4Address.parse("127.0.0.1", PORT);
     const localhost = net.Address{ .in = loopback };
     var server = try localhost.listen(.{
         .reuse_port = true,

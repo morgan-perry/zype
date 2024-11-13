@@ -2,6 +2,7 @@ const std = @import("std");
 const vaxis = @import("vaxis");
 const DoublyLinkedList = std.DoublyLinkedList;
 const net = std.net;
+const PORT = 1234;
 
 const TextInput = vaxis.widgets.TextInput;
 /// Set the default panic handler to the vaxis panic_handler. This will clean up the terminal if any
@@ -57,7 +58,7 @@ const MessagerApp = struct {
     stream: ?std.net.Stream,
     // Writer to write to connected socket
     writer: ?std.net.Stream.Writer,
-    port: u16 = 1234,
+    port: u16 = PORT,
     connected: bool = false,
     username: [:0]const u8,
 

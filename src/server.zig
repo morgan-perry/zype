@@ -25,20 +25,24 @@ const Client = struct {
         clients_mutex.lock();
         defer clients_mutex.unlock();
 
-        for (clients.items, 0..) |client, i| {
-            // lol at this name
+        var i: usize = 0;
+        while (i < clients.items.len) {
+            const client = clients.items[i];
             client.client.stream.writer().writeAll(message) catch |err| {
                 switch (err) {
                     error.BrokenPipe => {
                         // Client disconnected, remove it from the list
                         _ = clients.orderedRemove(i);
-                        continue;
+                        continue; // Don't increment i since we removed an element
                     },
                     else => {
+                        _ = clients.orderedRemove(i);
                         std.debug.print("Failed to write to client: {}\n", .{err});
+                        continue; // Don't increment i since we removed an element
                     },
                 }
             };
+            i += 1; // Only increment if we successfully processed this client
         }
     }
 
@@ -46,13 +50,13 @@ const Client = struct {
         defer {
             // Remove self from clients list
             clients_mutex.lock();
+            defer clients_mutex.unlock();
             for (clients.items, 0..) |client, i| {
                 if (client == self) {
                     _ = clients.orderedRemove(i);
                     break;
                 }
             }
-            clients_mutex.unlock();
 
             self.client.stream.close();
             self.allocator.destroy(self);
@@ -72,6 +76,8 @@ const Client = struct {
                 },
             };
 
+            if (bytes_read == 0) return;
+
             std.debug.assert(bytes_read < 65536);
             // Process the message
             const message = buffer[0..bytes_read];
@@ -86,7 +92,9 @@ const Client = struct {
             };
             defer self.allocator.free(response);
 
-            try self.broadcast_message(response);
+        self.broadcast_message(response) catch |err| {
+            std.debug.print("Error broadcasting message: {}\n", .{err});
+        };
         }
     }
 };

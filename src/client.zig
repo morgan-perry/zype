@@ -193,8 +193,8 @@ const MessagerApp = struct {
         const child = win.child(.{
             .x_off = win.width / 2,
             .y_off = 0,
-            .width = .{ .limit = (win.width / 2) - 2 },
-            .height = .{ .limit = win.height },
+            .width = (win.width / 2) - 2,
+            .height = win.height,
             .border = .{ .where = .all },
         });
         child.clear();
@@ -202,22 +202,22 @@ const MessagerApp = struct {
         const message_box = win.child(.{
             .x_off = 1,
             .y_off = 1,
-            .width = .{ .limit = (win.width / 2) - 2 },
-            .height = .{ .limit = 3 },
+            .width = (win.width / 2) - 2,
+            .height =  3,
             .border = .{ .where = .all },
         });
 
         self.text_input.draw(message_box);
 
         var it = self.message_history.first;
-        var y_offset: u32 = 3;
-        var i: u16 = 0; // NOTE: Does this cause a misalignment on CPU, should I use u32 regardless?
+        var y_offset: u16 = 3;
+        var i: u32 = 0;
         if (child.height > 0) {
             std.debug.assert(child.height > 0);
             while (it) |node| : (it = node.next) {
                 if (i <= (child.height - 1)) {
                     if (i < win.height) {
-                        _ = try child.printSegment(.{ .text = node.data }, .{ .row_offset = (win.height - y_offset) });
+                        _ = child.printSegment(.{ .text = node.data }, .{ .row_offset = (win.height - y_offset) });
                         y_offset += 1;
                         i += 1;
                     }

@@ -1,10 +1,11 @@
 .{
-    .name = "libvaxis-starter",
+    .name = .zype,
     .version = "0.0.0",
+    .fingerprint = 0x6c01201aafd4ceb6,
     .dependencies = .{
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis?ref=main#2bec962b22247de8c5edb84afd4210d30cdacce6",
-            .hash = "12207ebc7dfd84f8425b94f345dd87944aa2c8a880211f5db6349a3a985f09f7ac1d",
+            .url = "git+https://github.com/rockorager/libvaxis#cc9154d5f4afa3fdfd289157f195ec67804ef437",
+            .hash = "vaxis-0.5.1-BWNV_MYNCQDO92x2PTpsfv6GwDHmjL98rf6iL3pbMLj4",
         },
     },
     .paths = .{

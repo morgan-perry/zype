@@ -66,15 +66,15 @@ const Client = struct {
         while (true) {
             const bytes_read = self.client.stream.reader().read(&buffer) catch |err|
                 switch (err) {
-                error.ConnectionResetByPeer => {
-                    std.debug.print("Client disconnected\n", .{});
-                    break;
-                },
-                else => {
-                    std.debug.print("Error reading from client: {}\n", .{err});
-                    break;
-                },
-            };
+                    error.ConnectionResetByPeer => {
+                        std.debug.print("Client disconnected\n", .{});
+                        break;
+                    },
+                    else => {
+                        std.debug.print("Error reading from client: {}\n", .{err});
+                        break;
+                    },
+                };
 
             if (bytes_read == 0) return;
 
@@ -92,9 +92,9 @@ const Client = struct {
             };
             defer self.allocator.free(response);
 
-        self.broadcast_message(response) catch |err| {
-            std.debug.print("Error broadcasting message: {}\n", .{err});
-        };
+            self.broadcast_message(response) catch |err| {
+                std.debug.print("Error broadcasting message: {}\n", .{err});
+            };
         }
     }
 };

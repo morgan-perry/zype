@@ -10,7 +10,7 @@ This project started as a way to learn Zig and dip my toes into some manual memo
 However I learnt a good deal about the basics of the Zig lanuage itself, a brief foray into multithreading and thread pools, and that this server can handle ~250k req/s with some garbage LLM generated stress test python code.
 
 ### Building Zype
-Both the terminal and server run cross platform on Linux and Windows (I have not tested other systems), using the 0.13.0 version of the Zig compiler.
+Both the terminal and server run cross platform on Linux and Windows (I have not tested other systems), using the 0.14.1 version of the Zig compiler. Use `Control-P` to connect to the server.
 
 The client can be built and run by:
 
